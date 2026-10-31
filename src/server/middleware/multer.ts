@@ -1,21 +1,30 @@
 import multer, { StorageEngine } from 'multer';
 import path from 'path';
+import { randomUUID } from 'crypto';
+import fs from 'fs';
 import config from '../../config.js';
 
-// Define the type for the file object
-interface MulterFile extends Express.Multer.File {
-	originalname: string;
+const videoExtensions = new Set(['.mp4', '.mkv', '.webm', '.mov', '.avi', '.m4v', '.mpg', '.mpeg', '.ts', '.m3u8']);
+
+if (!fs.existsSync(config.videosDir)) {
+	fs.mkdirSync(config.videosDir, { recursive: true });
 }
 
-// Configure multer storage
 export const storage: StorageEngine = multer.diskStorage({
-	destination: (req: Express.Request, file: MulterFile, cb: (error: Error | null, destination: string) => void) => {
-		cb(null, config.videosDir);
-	},
-	filename: (req: Express.Request, file: MulterFile, cb: (error: Error | null, filename: string) => void) => {
-		cb(null, file.originalname);
-	},
+	destination: (_req, _file, cb) => cb(null, config.videosDir),
+	filename: (_req, file, cb) => {
+		const extension = path.extname(path.basename(file.originalname)).toLowerCase();
+		if (!videoExtensions.has(extension)) return cb(new Error('Unsupported video file extension.'), '');
+		cb(null, `${randomUUID()}${extension}`);
+	}
 });
 
-// Create the multer upload instance
-export const upload = multer({ storage });
+export const upload = multer({
+	storage,
+	limits: { fileSize: 2 * 1024 * 1024 * 1024, files: 1, fields: 4 },
+	fileFilter: (_req, file, cb) => {
+		const extension = path.extname(path.basename(file.originalname)).toLowerCase();
+		if (!videoExtensions.has(extension)) return cb(new Error('Only supported video file extensions are allowed.'));
+		cb(null, true);
+	}
+});
